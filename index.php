@@ -79,7 +79,8 @@
 				//pick a random one
 				$response['text'] = $expansions[rand(0, sizeof($expansions)-1)];
 			} else if (!$response['text']) { // "cache miss" - gotta fetch some more stuff
-
+				// temporary solution :P
+				$response['text'] = "Nothing. That stands for absolutely nothing.";
 			}
 
 		} else if (sizeof($args) > 1) { // personal definition (POST)
