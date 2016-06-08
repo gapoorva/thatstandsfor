@@ -1,4 +1,4 @@
-# That Stand For
+# That Stands For
 
 Finally! A useful Slack integration that will tell you what those pesky acronyms mean! 
 
@@ -10,4 +10,6 @@ Setup instructions:
 
 2. Enter `/what's` for the command name. (You can actually pick whatever you want but if you make it `what's`, it's a lot more fun.)
 
-3. 
+3. Set all the options on the next page to what you want. The URL to send requests to is http://www.apoorvagupta.com/thatstandsfor/
+
+4. ~~Mock~~ Help your teammates understand what all these acronyms mean by typing `/what's` in a channel. (or whatever else you set the command name to be).
