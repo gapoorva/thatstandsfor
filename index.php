@@ -1,4 +1,5 @@
 <?php
+	date_default_timezone_set('UTC');
 	if($_SERVER['REQUEST_METHOD'] == "GET") {
 ?>
 <html>
@@ -53,16 +54,20 @@
 
 		$args = preg_split("/[\s,]+/", $input_text);
 
+//handle_request:
+
 		if ($input_text == "") { //empty input
-			// choose a random acronym
+			// throw an error
+			$response['text'] = "Did you mean to ask what something stands for?\nIf so, try doing it this way:\n/what's ACRONYM_HERE";
+			$response['response_type'] = "ephemeral";
 		} else if (sizeof($args) == 1) { // expand acronym (GET)
 			$id = strtoupper($args[0]); //ucwords()
 			$user_specific_id = $user_id . $team_id . strtoupper($args[0]);
 
-			$stmt = $conn->prepare('SELECT id, expansion FROM thatstandsfor WHERE id = ? OR id = ?');
+			$stmt = $conn->prepare('SELECT id, expansion, likes FROM thatstandsfor WHERE id = ? OR id = ?');
 			$stmt->bind_param('ss', $id, $user_specific_id);
 			$stmt->execute();
-			$stmt->bind_result($acronym, $expansion);
+			$stmt->bind_result($acronym, $expansion, $likes);
 
 			$expansions = array();
 
@@ -72,23 +77,61 @@
 					$response['text'] = $expansion;
 					break;
 				}
-				$expansions[] = $expansion;
+				for($i = 0; $i < $likes; $i++) {
+					$expansions[] = $expansion;
+				}
 			}
 
-			if (sizeof($expansions) && !$response['text']) { // there are some expansions for this acronym
+			if (sizeof($expansions) && !$response['text']) { // there are some expansions for this acronym and we haven't picked one yet
 				//pick a random one
 				$response['text'] = $expansions[rand(0, sizeof($expansions)-1)];
 			} else if (!$response['text']) { // "cache miss" - gotta fetch some more stuff
-				// temporary solution :P
-				$response['text'] = "Nothing. That stands for absolutely nothing.";
+				// fetch from stands4.com
+				// do we still have quota?
+
+				$quotacheck = $conn->query("SELECT COUNT(*) FROM stands4quota WHERE day='".date("d_m_Y")."'");
+				$numused = $quotacheck->fetch_row()[0];
+
+				if ($numused >= 100) {
+					$response['text'] = "ThatStandsFor was super popular today! I'm tired. Want to try tomorrow? You can also make your own definition:\n/what's WORD My Definition For Word";
+					$response['response_type'] = "ephemeral";
+				} else {
+
+					$conn->query("INSERT INTO stands4quota (day) VALUES (".date("d_m_Y").")");
+
+
+					$url = "http://www.stands4.com/services/v2/abbr.php?uid=5167&tokenid=04QuaC8odah1Rv96&term=".strtolower(preg_replace("/[^A-Za-z0-9]/", '', $arg[0]));
+					$xmlstr = file_get_contents($url);
+					$xmlobj = simplexml_load_string($xmlstr);
+
+					$response['text'] = $xmlstr;
+
+					$sqlinsertquery = "INSERT INTO thatstandsfor (id, expansion, likes) VALUES ";
+					foreach ($xmlobj["result"] as $i => $result) {
+						if ($i != 0) {
+							$sqlinsertquery .= ", ";
+						}
+						if ($i > 29) break;
+						$sqlinsertquery .= "(\"".strtoupper($result["term"])."\",\"".$result["definition"]."\",1)";
+					}
+
+					$conn->query($sqlinsertquery); // insert everything we got from stands4
+
+					$response['text'] .= "inserted stuff";
+
+					//goto handle_request; // try this query again
+
+				}
+
+				
 			}
 
 		} else if (sizeof($args) > 1) { // personal definition (POST)
 			$user_specific_id = $user_id . $team_id . strtoupper($args[0]);
 			$user_specific_def = substr(ucwords(implode(" ", array_slice($args, 1))), 0, 250);
 
-			$stmt = $conn->prepare('INSERT INTO thatstandsfor (id, expansion) VALUES (?, ?)');
-			$stmt->bind_param('ss', $user_specific_id, $user_specific_def);
+			$stmt = $conn->prepare('INSERT INTO thatstandsfor (id, expansion, likes) VALUES (?, ?, ?)');
+			$stmt->bind_param('ssi', $user_specific_id, $user_specific_def, 1);
 			$stmt->execute();
 
 			$response['text'] = "OK, next time you ask what " . strtoupper($args[0]) . " stands for, I'll remind you that stands for \"" . $user_specific_def . "\"";

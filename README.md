@@ -4,6 +4,8 @@ Finally! A useful Slack integration that will tell you what those pesky acronyms
 
 Disclaimer: Not actually intended to return the correct contextual meaning of requested acronyms. This is mostly on purpose.
 
+Credit: I used the Stands4 API to retrieve Acronym expansions for new acronyms. Link to their website: [www.stands4.com](http://www.stands4.com). 
+
 Setup instructions:
 
 1. Find the settings on your Slack to add a custom slash command. Or just follow this link: [Add a Slash Command](https://my.slack.com/services/new/slash-commands)
