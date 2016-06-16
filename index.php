@@ -54,7 +54,7 @@
 
 		$args = preg_split("/[\s,]+/", $input_text);
 
-//handle_request:
+handle_request:
 
 		if ($input_text == "") { //empty input
 			// throw an error
@@ -93,33 +93,45 @@
 				$numused = $quotacheck->fetch_row()[0];
 
 				if ($numused >= 100) {
-					$response['text'] = "ThatStandsFor was super popular today! I'm tired. Want to try tomorrow? You can also make your own definition:\n/what's WORD My Definition For Word";
+					$response['text'] = "ThatStandsFor was super popular today! It's going to take me a little longer to define that for you. Want to try tomorrow? You can also make your own definition:\n/what's WORD My Definition For Word";
 					$response['response_type'] = "ephemeral";
 				} else {
 
-					$conn->query("INSERT INTO stands4quota (day) VALUES (".date("d_m_Y").")");
+					if(TRUE !== $conn->query("INSERT INTO stands4quota (day) VALUES ('".date("d_m_Y")."')")) {
+						echo $conn->error;
+					}
+					$term = strtolower(preg_replace("/[^A-Za-z0-9]/", '', $args[0]));
+					$xmlstr = file_get_contents("http://www.stands4.com/services/v2/abbr.php?uid=5167&tokenid=04QuaC8odah1Rv96&term=".$term);
 
-
-					$url = "http://www.stands4.com/services/v2/abbr.php?uid=5167&tokenid=04QuaC8odah1Rv96&term=".strtolower(preg_replace("/[^A-Za-z0-9]/", '', $arg[0]));
-					$xmlstr = file_get_contents($url);
 					$xmlobj = simplexml_load_string($xmlstr);
 
-					$response['text'] = $xmlstr;
+					//echo $xmlstr;
+					//echo "<br>";
 
 					$sqlinsertquery = "INSERT INTO thatstandsfor (id, expansion, likes) VALUES ";
-					foreach ($xmlobj["result"] as $i => $result) {
+					$definitions = array();
+					foreach($xmlobj->result as $r) {
+						if(!in_array($r->definition, $definitions)) {
+							$definitions[] = ucwords($r->definition);
+						}
+						if (count($definitions) > 29) { // only want as much as 30
+							break;
+						}
+					}
+
+					foreach ($definitions as $i => $def) {
 						if ($i != 0) {
 							$sqlinsertquery .= ", ";
 						}
-						if ($i > 29) break;
-						$sqlinsertquery .= "(\"".strtoupper($result["term"])."\",\"".$result["definition"]."\",1)";
+						$sqlinsertquery .= "(\"".strtoupper($term)."\",\"".ucwords($def)."\",1)";
 					}
+					//echo $sqlinsertquery;
 
 					$conn->query($sqlinsertquery); // insert everything we got from stands4
 
-					$response['text'] .= "inserted stuff";
+					//echo "<br>inserted stuff";
 
-					//goto handle_request; // try this query again
+					goto handle_request; // try this query again
 
 				}
 
@@ -131,7 +143,8 @@
 			$user_specific_def = substr(ucwords(implode(" ", array_slice($args, 1))), 0, 250);
 
 			$stmt = $conn->prepare('INSERT INTO thatstandsfor (id, expansion, likes) VALUES (?, ?, ?)');
-			$stmt->bind_param('ssi', $user_specific_id, $user_specific_def, 1);
+			$one = 1;
+			$stmt->bind_param('ssi', $user_specific_id, $user_specific_def, $one);
 			$stmt->execute();
 
 			$response['text'] = "OK, next time you ask what " . strtoupper($args[0]) . " stands for, I'll remind you that stands for \"" . $user_specific_def . "\"";
